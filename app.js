@@ -41,6 +41,7 @@ mongoose.connect('mongodb://localhost:27017/userDB', {
     useNewUrlParser: true,
     useUnifiedTopology: true
 });
+mongoose.set('useCreateIndex', true);
 
 const userSchema = new mongoose.Schema({
     email: String,
@@ -54,7 +55,7 @@ userSchema.plugin(passportLocalMongoose);
 //     encryptedFields: ['password']
 // });
 
-const User = mongoose.model('user', userSchema);
+const User = new mongoose.model('User', userSchema);
 
 passport.use(User.createStrategy());
 
@@ -73,30 +74,30 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
     const userData = req.body;
 
-    User.findOne({
-        email: userData.username
-    }, (err, found) => {
-        if (!found) {
-            console.log(err);
-            console.log("There is no such email registered yet!");
+    const user = new User ({
+        username: userData.username,
+        password: userData.password
+    });
+
+    req.login(user, (err) => {
+        if (err) {
+            res.redirect('login');
         } else {
-            bcrypt.compare(userData.password, found.password, (err, match) => {
-                if (match) {
-                    res.render('secrets');
-                } else {
-                    console.log("Wrong Password");
-                }
+            passport.authenticate('local')(req, res, ()=> {
+                res.redirect('secrets');
             });
         }
-    })
-})
+    }); 
+});
 
 app.get('/register', (req, res) => {
     res.render('register');
 })
 
 app.post('/register', (req, res) => {
-    User.register({username:req.body.username}, req.body.password, (err, user) {
+    User.register({
+        username: req.body.username
+    }, req.body.password, (err, user) => {
         if (err) {
             console.log(err);
             res.redirect('/login');
@@ -106,11 +107,19 @@ app.post('/register', (req, res) => {
             })
         }
     })
-
 });
 
 app.get('/secrets', (req, res) => {
-    res.render('secrets');
+    if(req.isAuthenticated()) {
+        res.render('secrets');
+    } else {
+        res.redirect('login');
+    }
+})
+
+app.get('/logout', (req, res) => {
+    req.logout();
+    res.redirect('/');
 })
 
 app.get('/submit', (req, res) => {
